@@ -1,0 +1,32 @@
+WARN [11-24|11:43:27] No etherbase set and no accounts found as default 
+INFO [11-24|11:43:27] Starting peer-to-peer node               instance=Geth/v1.7.3-stable-4bb3c89d/windows-amd64/go1.9
+INFO [11-24|11:43:27] Allocated cache and file handles         database=F:\\区块链\\geth\\myData\\00\\geth\\chaindata cache=128 handles=1024
+WARN [11-24|11:43:27] Upgrading database to use lookup entries 
+INFO [11-24|11:43:27] Initialised chain configuration          config="{ChainID: 666 Homestead: 0 DAO: <nil> DAOSupport: false EIP150: <nil> EIP155: 0 EIP158: 0 Byzantium: <nil> Engine: unknown}"
+INFO [11-24|11:43:27] Disk storage enabled for ethash caches   dir=F:\\区块链\\geth\\myData\\00\\geth\\ethash count=3
+INFO [11-24|11:43:27] Disk storage enabled for ethash DAGs     dir=C:\\Users\\LIUYT\\AppData\\Ethash       count=2
+INFO [11-24|11:43:27] Initialising Ethereum protocol           versions="[63 62]" network=2018
+INFO [11-24|11:43:27] Loaded most recent local header          number=0 hash=342767…0a7cce td=1
+INFO [11-24|11:43:27] Loaded most recent local full block      number=0 hash=342767…0a7cce td=1
+INFO [11-24|11:43:27] Loaded most recent local fast block      number=0 hash=342767…0a7cce td=1
+INFO [11-24|11:43:27] Regenerated local transaction journal    transactions=0 accounts=0
+INFO [11-24|11:43:27] Starting P2P networking 
+INFO [11-24|11:43:27] Database deduplication successful        deduped=0
+INFO [11-24|11:43:29] UDP listener up                          self=enode://c488f2f87bfc565db391ea360be91f6617661a889109d84c1197f28b8e3e66616d2a783c1984de0683f66b9880a478b0bd92f4e13466bc6e37f79d9ecfd6edb2@[::]:30303
+INFO [11-24|11:43:29] RLPx listener up                         self=enode://c488f2f87bfc565db391ea360be91f6617661a889109d84c1197f28b8e3e66616d2a783c1984de0683f66b9880a478b0bd92f4e13466bc6e37f79d9ecfd6edb2@[::]:30303
+INFO [11-24|11:43:29] IPC endpoint opened: \\.\pipe\geth.ipc 
+INFO [11-24|11:43:29] HTTP endpoint opened: http://172.18.32.216:8545 
+INFO [11-24|11:53:12] Updated mining threads                   threads=1
+INFO [11-24|11:53:12] Transaction pool price threshold updated price=18000000000
+INFO [11-24|11:53:12] Starting mining operation 
+INFO [11-24|11:53:12] Commit new mining work                   number=1 txs=0 uncles=0 elapsed=468µs
+INFO [11-24|11:53:13] Successfully sealed new block            number=1 hash=af60a4…4a1f4c
+INFO [11-24|11:53:14] Commit new mining work                   number=2 txs=0 uncles=0 elapsed=496.4µs
+INFO [11-24|11:53:14] 🔨 mined potential block                  number=1 hash=af60a4…4a1f4c
+INFO [11-24|11:53:14] Successfully sealed new block            number=2 hash=8f205c…77c288
+INFO [11-24|11:53:14] 🔨 mined potential block                  number=2 hash=8f205c…77c288
+INFO [11-24|11:53:14] Commit new mining work                   number=3 txs=0 uncles=0 elapsed=496.9µs
+INFO [11-24|11:53:14] Successfully sealed new block            number=3 hash=d3702c…d43266
+INFO [11-24|11:53:14] 🔨 mined potential block                  number=3 hash=d3702c…d43266
+INFO [11-24|11:53:14] Mining too far in the future             wait=2s
+INFO [11-24|11:53:16] Commit new mining work                   number=4 txs=0 uncles=0 elapsed=2.000s
