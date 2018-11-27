@@ -54,6 +54,10 @@ Server::~Server()
 void Server::waitForClient()
 {
 
+   
+}
+
+void Server::dealGet() {
     /* 接收数据 */
     int FILE_NAME_MAX_SIZE = 100;
     char fileName[FILE_NAME_MAX_SIZE + 1];
@@ -79,11 +83,16 @@ void Server::waitForClient()
     {
         if (recAck == sendAck)
         {
-            try{
-                if(readFile.peek() != EOF) {
+            try
+            {
+                if (readFile.peek() != EOF)
+                {
                     readFile.read((char *)&pack_info.data, sizeof(int) * MSG_BUG_SIZE);
                     pack_info.FIN = false;
-                } else {
+                    readFile.close();
+                }
+                else
+                {
                     pack_info.FIN = true;
                 }
                 pack_info.bufferSize = readFile.gcount();
@@ -99,9 +108,8 @@ void Server::waitForClient()
                 UDP_PACK rcv;
                 recvfrom(serSocket, (char *)&rcv, sizeof(rcv), 0, (sockaddr *)&cltAddr, &addrLen);
                 recAck = rcv.ack;
-
             }
-            catch (exception& err)
+            catch (exception &err)
             {
                 cerr << err.what() << endl;
                 exit(1);
@@ -122,7 +130,6 @@ void Server::waitForClient()
         }
     }
     /* 关闭文件 */
-    // fclose(fp);
     readFile.close();
     printf("File:%s Transfer Successful!\n", fileName);
 }

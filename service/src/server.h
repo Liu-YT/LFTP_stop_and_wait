@@ -17,7 +17,8 @@ public:
     Server(string _dir = "../data/", int port = 8888);
     ~Server();
     void waitForClient();
-
+    void dealGet();
+    void dealSend();
 private:
     string dataDir; // 文件地址
     int serPort;    // 服务端口    
