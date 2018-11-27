@@ -173,8 +173,4 @@ inline DWORD WINAPI CreateClientThread(LPVOID lpParameter)
 //     closesocket(serSocket);
 //     WSACleanup();
 //     return 0;
-// }ntf(recvData);
-//         }
-
-//         const char *sendData = "date udp\n";
-// 
+// }

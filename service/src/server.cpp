@@ -1,8 +1,9 @@
-
+#include <exception>
 #include <iostream>
 #include <WS2tcpip.h>
 #include "server.h"
 #include "package.h"
+#include <fstream>
 
 #define MSG_BUG_SIZE 255
 
@@ -66,11 +67,7 @@ void Server::waitForClient()
     string realFileName = "../data/" + string(fileName);
 
     /* 打开文件 */
-    FILE *fp = fopen(realFileName.c_str(), "r");
-    if (NULL == fp)
-    {
-        printf("File:%s Not Found.\n", realFileName.c_str());
-    }
+    ifstream readFile(realFileName.c_str(), ios::in | ios::binary); //二进制读方式打开
 
     cout << "start transfer file" << endl;
 
@@ -82,9 +79,14 @@ void Server::waitForClient()
     {
         if (recAck == sendAck)
         {
-            if (fread(pack_info.data, sizeof(char), MSG_BUG_SIZE, fp))
-            {
-                cout << pack_info.data << endl;
+            try{
+                if(readFile.peek() != EOF) {
+                    readFile.read((char *)&pack_info.data, sizeof(int) * MSG_BUG_SIZE);
+                    pack_info.FIN = false;
+                } else {
+                    pack_info.FIN = true;
+                }
+                pack_info.bufferSize = readFile.gcount();
                 /* 发送ack放进包头,用于标记顺序 */
                 pack_info.ack = sendAck;
                 if (sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, addrLen) < 0)
@@ -97,10 +99,12 @@ void Server::waitForClient()
                 UDP_PACK rcv;
                 recvfrom(serSocket, (char *)&rcv, sizeof(rcv), 0, (sockaddr *)&cltAddr, &addrLen);
                 recAck = rcv.ack;
+
             }
-            else
+            catch (exception& err)
             {
-                cout << "Read failed!" << endl;
+                cerr << err.what() << endl;
+                exit(1);
             }
         }
         else
@@ -118,7 +122,8 @@ void Server::waitForClient()
         }
     }
     /* 关闭文件 */
-    fclose(fp);
+    // fclose(fp);
+    readFile.close();
     printf("File:%s Transfer Successful!\n", fileName);
 }
 
@@ -126,45 +131,3 @@ inline DWORD WINAPI CreateClientThread(LPVOID lpParameter)
 {
     cout << "CreateClientThread" << endl;
 }
-
-// int test()
-// {
-//     WSADATA wsaData;
-//     WORD sockVersion = MAKEWORD(2, 2);
-//     if (WSAStartup(sockVersion, &wsaData) != 0)
-//         return 0;
-
-//     SOCKET serSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-//     if (serSocket == INVALID_SOCKET) {
-//         cerr << "socket error!" << endl;
-//         return 0;
-//     }
-
-//     sockaddr_in serAddr;
-//     serAddr.sin_family = AF_INET;
-//     serAddr.sin_port = htons(8888);
-//     serAddr.sin_addr.S_un.S_addr = INADDR_ANY;
-//     if (bind(serSocket, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR) {
-//         cerr << "bind error!" << endl;
-//         closesocket(serSocket);
-//         return 0;
-//     }
-
-//     sockaddr_in remoteAddr;
-//     int nAddrLen = sizeof(remoteAddr);
-//     while (true) {
-//         char recvData[255];
-//         int ret = recvfrom(serSocket, recvData, 255, 0, (sockaddr *)&remoteAddr, &nAddrLen);
-//         if (ret > 0) {
-//             recvData[ret] = 0x00;
-//             printf("Accept：%s \r\n", inet_ntoa(remoteAddr.sin_addr));
-//             printf(recvData);
-//         }
-
-//         const char *sendData = "date udp\n";
-//         sendto(serSocket, sendData, strlen(sendData), 0, (sockaddr *)&remoteAddr, nAddrLen);
-//     }
-//     closesocket(serSocket);
-//     WSACleanup();
-//     return 0;
-// }

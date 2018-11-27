@@ -2,7 +2,7 @@
 #include <winsock2.h>
 #include "client.h"
 #include "package.h"
-
+#include <fstream>
 #pragma comment(lib, "ws2_32.lib")
 
 #define MSG_BUG_SIZE 255
@@ -64,9 +64,10 @@ void Client::lget() {
 
     /* 打开文件，准备写入 */
     string filePath = "../data/" + file;
-    cout << filePath << endl;
-    FILE *fp = fopen(filePath.c_str(), "w");
-    if (NULL == fp) {
+    // cout << filePath << endl;
+    ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
+    if (NULL == writerFile)
+    {
         cout << "File: " << filePath << " Can Not Open To Write" << endl;
         exit(2);
     }
@@ -87,12 +88,14 @@ void Client::lget() {
                 if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0) {
                     printf("Send confirm information failed!");
                 }
-                /* 写入文件 */
-                if (fwrite(pack_info.data, sizeof(char), MSG_BUG_SIZE, fp) < 100)
-                {
-                    // printf("File:\t%s Write Failed\n", filename);
-                    cout << "file: " << file << " write failed!" << endl;
-                    break;
+                writerFile.write((char *)&pack_info.data, pack_info.bufferSize);
+                if(pack_info.FIN) {
+                    writerFile.close();
+                    ::closesocket(cltSocket);
+                    ::WSACleanup();
+                    cout << "Receive File:\t" << file << " From Server IP Successful!" << endl;
+                    writerFile.close();
+                    exit(0);
                 }
             }
             else  {
@@ -106,38 +109,7 @@ void Client::lget() {
         }
         else {
             cerr << "Have a error!" << endl;
+            exit(3);
         }
     }
-
-    cout << "Receive File:\t" <<  file << " From Server IP Successful!" << endl;
-    fclose(fp);
 }
-
-// int test(int argc, char *argv[]) {
-//     WORD socketVersion = MAKEWORD(2, 2);
-//     WSADATA wsaData;
-//     if (WSAStartup(socketVersion, &wsaData) != 0)
-//         return 0;
-        
-//     SOCKET sclient = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-//     sockaddr_in sin;
-//     sin.sin_family = AF_INET;
-//     sin.sin_port = htons(8888);
-//     sin.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-//     int len = sizeof(sin);
-
-//     const char *sendData = "asaaaaaaaaaaaaaaak\n";
-//     sendto(sclient, sendData, strlen(sendData), 0, (sockaddr *)&sin, len);
-
-//     char recvData[255];
-//     int ret = recvfrom(sclient, recvData, 255, 0, (sockaddr *)&sin, &len);
-//     if (ret > 0) {
-//         recvData[ret] = 0x00;
-//         printf(recvData);
-//     }
-
-//     closesocket(sclient);
-//     WSACleanup();
-//     return 0;
-// }
