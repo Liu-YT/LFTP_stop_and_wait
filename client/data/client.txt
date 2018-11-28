@@ -1,32 +1,196 @@
-WARN [11-24|11:43:27] No etherbase set and no accounts found as default 
-INFO [11-24|11:43:27] Starting peer-to-peer node               instance=Geth/v1.7.3-stable-4bb3c89d/windows-amd64/go1.9
-INFO [11-24|11:43:27] Allocated cache and file handles         database=F:\\区块链\\geth\\myData\\00\\geth\\chaindata cache=128 handles=1024
-WARN [11-24|11:43:27] Upgrading database to use lookup entries 
-INFO [11-24|11:43:27] Initialised chain configuration          config="{ChainID: 666 Homestead: 0 DAO: <nil> DAOSupport: false EIP150: <nil> EIP155: 0 EIP158: 0 Byzantium: <nil> Engine: unknown}"
-INFO [11-24|11:43:27] Disk storage enabled for ethash caches   dir=F:\\区块链\\geth\\myData\\00\\geth\\ethash count=3
-INFO [11-24|11:43:27] Disk storage enabled for ethash DAGs     dir=C:\\Users\\LIUYT\\AppData\\Ethash       count=2
-INFO [11-24|11:43:27] Initialising Ethereum protocol           versions="[63 62]" network=2018
-INFO [11-24|11:43:27] Loaded most recent local header          number=0 hash=342767…0a7cce td=1
-INFO [11-24|11:43:27] Loaded most recent local full block      number=0 hash=342767…0a7cce td=1
-INFO [11-24|11:43:27] Loaded most recent local fast block      number=0 hash=342767…0a7cce td=1
-INFO [11-24|11:43:27] Regenerated local transaction journal    transactions=0 accounts=0
-INFO [11-24|11:43:27] Starting P2P networking 
-INFO [11-24|11:43:27] Database deduplication successful        deduped=0
-INFO [11-24|11:43:29] UDP listener up                          self=enode://c488f2f87bfc565db391ea360be91f6617661a889109d84c1197f28b8e3e66616d2a783c1984de0683f66b9880a478b0bd92f4e13466bc6e37f79d9ecfd6edb2@[::]:30303
-INFO [11-24|11:43:29] RLPx listener up                         self=enode://c488f2f87bfc565db391ea360be91f6617661a889109d84c1197f28b8e3e66616d2a783c1984de0683f66b9880a478b0bd92f4e13466bc6e37f79d9ecfd6edb2@[::]:30303
-INFO [11-24|11:43:29] IPC endpoint opened: \\.\pipe\geth.ipc 
-INFO [11-24|11:43:29] HTTP endpoint opened: http://172.18.32.216:8545 
-INFO [11-24|11:53:12] Updated mining threads                   threads=1
-INFO [11-24|11:53:12] Transaction pool price threshold updated price=18000000000
-INFO [11-24|11:53:12] Starting mining operation 
-INFO [11-24|11:53:12] Commit new mining work                   number=1 txs=0 uncles=0 elapsed=468µs
-INFO [11-24|11:53:13] Successfully sealed new block            number=1 hash=af60a4…4a1f4c
-INFO [11-24|11:53:14] Commit new mining work                   number=2 txs=0 uncles=0 elapsed=496.4µs
-INFO [11-24|11:53:14] 🔨 mined potential block                  number=1 hash=af60a4…4a1f4c
-INFO [11-24|11:53:14] Successfully sealed new block            number=2 hash=8f205c…77c288
-INFO [11-24|11:53:14] 🔨 mined potential block                  number=2 hash=8f205c…77c288
-INFO [11-24|11:53:14] Commit new mining work                   number=3 txs=0 uncles=0 elapsed=496.9µs
-INFO [11-24|11:53:14] Successfully sealed new block            number=3 hash=d3702c…d43266
-INFO [11-24|11:53:14] 🔨 mined potential block                  number=3 hash=d3702c…d43266
-INFO [11-24|11:53:14] Mining too far in the future             wait=2s
-INFO [11-24|11:53:16] Commit new mining work                   number=4 txs=0 uncles=0 elapsed=2.000s
+#include <stdio.h>
+#include <winsock2.h>
+#include "client.h"
+#include "package.h"
+#include <fstream>
+#pragma comment(lib, "ws2_32.lib")
+
+#define MSG_BUG_SIZE 255
+
+Client::Client(string _ip, string _file, int _port) {
+
+    cout << "Initializing client...\n";
+    this->serverIp = _ip;
+    this->file = _file;
+    this->serPort = _port;
+
+    this->sockVersion = MAKEWORD(2, 2);
+    if (WSAStartup(sockVersion, &wsaData) != 0)
+        exit(1);
+
+    this->cltSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (cltSocket == INVALID_SOCKET) {
+        cerr << "socket create error!" << endl;
+        exit(2);
+    }
+
+    this->serAddr.sin_family = AF_INET;;
+    this->serAddr.sin_port = htons(this->serPort);
+    this->serAddr.sin_addr.S_un.S_addr = inet_addr(this->serverIp.c_str());
+
+    this->addrLen = sizeof(serAddr);
+    cout << "Server socket created successfully..." << endl;
+}
+
+Client::~Client() {
+    ::closesocket(cltSocket);
+    ::WSACleanup();
+    cout << "Socket closed..." << endl;
+}
+
+void Client::lsend() {
+
+    string fileName = file.substr(file.find_last_of('/')+1);
+    // cout << fileName << endl;
+
+    /* 发送文件名 */
+    if (sendto(cltSocket, fileName.c_str(), strlen(fileName.c_str()), 0, (sockaddr *)&serAddr, addrLen) < 0)
+    {
+        cout << "Send File Name: " << fileName << " Failed" << endl;
+        exit(1);
+    }
+
+    /* 打开文件，准备写入 */
+    ifstream readFile(file.c_str(), ios::in | ios::binary); //二进制读方式打开
+    if (NULL == readFile)
+    {
+        cout << "File: " << file << " Can Not Open To Write" << endl;
+        exit(2);
+    }
+
+    /* 从服务器接收数据，并写入文件 */
+    int sendAck = 0;
+    int recAck = 0;
+    UDP_PACK pack_info;
+    while (true)
+    {
+        try
+        {
+            if (recAck == sendAck)
+            {
+                readFile.read((char *)&pack_info.data, sizeof(int) * MSG_BUG_SIZE);
+                if (readFile.peek() != EOF)
+                {
+                    pack_info.FIN = false;
+                }
+                else
+                {
+                    pack_info.FIN = true;
+                    readFile.close();
+                }
+                pack_info.bufferSize = readFile.gcount();
+                /* 发送ack放进包头,用于标记顺序 */
+                pack_info.ack = sendAck;
+
+                cout << pack_info.ack << " " <<  pack_info.bufferSize << " " << pack_info.FIN << endl;
+
+                if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0)
+                {
+                    perror("Send File Failed: ");
+                    break;
+                }
+                /* 接收确认消息 */
+                UDP_PACK rcv;
+                if(recvfrom(cltSocket, (char *)&rcv, sizeof(rcv), 0, (sockaddr *)&serAddr, &addrLen) < 0) {
+                    perror("Send File Failed: ");
+                    break;
+                }
+                ++sendAck;
+                recAck = rcv.ack;
+                if(rcv.FIN) {
+                    cout << "Transfer successfully" << endl;
+                    ::closesocket(cltSocket);
+                    ::WSACleanup();
+                    cout << "Socket closed..." << endl;
+                    exit(0);
+                }
+            }
+            else
+            {
+                /* 如果接收的id和发送的id不相同,重新发送 */
+                if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0)
+                {
+                    perror("Send File Failed:");
+                    break;
+                }
+                /* 接收确认消息 */
+                UDP_PACK rcv;
+                recvfrom(cltSocket, (char *)&rcv, sizeof(rcv), 0, (sockaddr *)&serAddr, &addrLen);
+                recAck = rcv.ack;
+
+                if (rcv.FIN && recAck == sendAck)
+                {
+                    cout << "Transfer successfully" << endl;
+                    ::closesocket(cltSocket);
+                    ::WSACleanup();
+                    cout << "Socket closed..." << endl;
+                    exit(0);
+                }
+            }
+        }
+        catch (exception &err)
+        {
+            cerr << err.what() << endl;
+            exit(1);
+        }
+    }
+}
+
+void Client::lget() {
+    
+    /* 发送文件名 */
+    if (sendto(cltSocket, file.c_str(), strlen(file.c_str()), 0, (sockaddr *)&serAddr, addrLen) < 0) {
+        cout << "Send File Name: " << file <<  " Failed" << endl;
+        exit(1);
+    }
+
+    /* 打开文件，准备写入 */
+    string filePath = "../data/" + file;
+    // cout << filePath << endl;
+    ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
+    if (NULL == writerFile)
+    {
+        cout << "File: " << filePath << " Can Not Open To Write" << endl;
+        exit(2);
+    }
+
+    /* 从服务器接收数据，并写入文件 */
+    int sendAck = 0;
+    int recAck = 0;
+    UDP_PACK pack_info;
+    while (true) {
+        if (recvfrom(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, &addrLen) > 0) {
+            cout << "ack: " << pack_info.ack << endl;
+            recAck = pack_info.ack;
+            if (sendAck == recAck) {
+                sendAck++;
+                pack_info.ack = sendAck;
+
+                /* 发送数据包确认信息 */
+                if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0) {
+                    cout << "Send confirm information failed!" << endl;
+                }
+                writerFile.write((char *)&pack_info.data, pack_info.bufferSize);
+                if(pack_info.FIN) {
+                    writerFile.close();
+                    ::closesocket(cltSocket);
+                    ::WSACleanup();
+                    cout << "Receive File:\t" << file << " From Server " << serverIp << " Successful!" << endl;
+                    exit(0);
+                }
+            }
+            else  {
+                /* 如果是重发的包或者发生部分丢包 */
+                pack_info.ack = sendAck;
+                /* 重发数据包确认信息 */
+                if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0) {
+                    cout << "Send confirm information failed!" << endl;
+                }
+            }
+        }
+        else {
+            cerr << "Have a error!" << endl;
+            exit(3);
+        }
+    }
+}

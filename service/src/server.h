@@ -25,7 +25,6 @@ private:
     WSADATA wsaData;
     WORD sockVersion;
     SOCKET serSocket;
-    SOCKET cltSocket;
     SOCKADDR_IN cltAddr;
     SOCKADDR_IN serAddr;
     int addrLen;

@@ -53,11 +53,90 @@ Server::~Server()
 
 void Server::waitForClient()
 {
-
-   
+    // dealGet();
+    dealSend();
 }
 
-void Server::dealGet() {
+void Server::dealSend()
+{
+
+    /* 接收数据 */
+    int FILE_NAME_MAX_SIZE = 100;
+    char fileName[FILE_NAME_MAX_SIZE + 1];
+    memset(fileName, 0, FILE_NAME_MAX_SIZE);
+    if (recvfrom(serSocket, fileName, FILE_NAME_MAX_SIZE, 0, (sockaddr *)&cltAddr, &addrLen) < 0)
+    {
+        cerr << "Receive Data Failed" << endl;
+        exit(1);
+    }
+
+    string filePath = "../data/" + string(fileName);
+
+    /* 打开文件，准备写入 */
+    // cout << filePath << endl;
+    ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
+    if (writerFile == NULL)
+    {
+        cout << "File: " << filePath << " Can Not Open To Write" << endl;
+        exit(2);
+    }
+
+    // 发送确认包
+    UDP_PACK confirm;
+    confirm.ack = 0;
+    confirm.FIN = false;
+    sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&cltAddr, addrLen);
+
+    /* 从服务器接收数据，并写入文件 */
+    int sendAck = 0;
+    int recAck = 0;
+    UDP_PACK pack_info;
+    while (true)
+    {
+        if (recvfrom(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, &addrLen) > 0)
+        {
+            cout << "ack: " << pack_info.ack << " "<< pack_info.bufferSize << endl;
+            recAck = pack_info.ack;
+            if (sendAck == recAck)
+            {
+                sendAck++;
+                pack_info.ack = sendAck;
+
+                // 写入信息
+                writerFile.write((char *)&pack_info.data, pack_info.bufferSize);
+
+                /* 发送数据包确认信息 */
+                if (sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, addrLen) < 0)
+                {
+                    cout << "Send confirm information failed!" << endl;
+                }
+                if (pack_info.FIN)
+                {
+                    writerFile.close();
+                    ::closesocket(serSocket);
+                    ::WSACleanup();
+                    cout << "Socket closed..." << endl;
+                }
+            }
+            else
+            {
+                /* 如果是重发的包或者发生部分丢包 */
+                pack_info.ack = sendAck;
+                /* 重发数据包确认信息 */
+                if (sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0)
+                {
+                    cout << "Send confirm information failed!" << endl;
+                }
+            }
+        }
+        else {
+            break;
+        }
+    }
+}
+
+void Server::dealGet()
+{
     /* 接收数据 */
     int FILE_NAME_MAX_SIZE = 100;
     char fileName[FILE_NAME_MAX_SIZE + 1];
@@ -68,15 +147,21 @@ void Server::dealGet() {
         cerr << "Receive Data Failed" << endl;
         exit(1);
     }
-    string realFileName = "../data/" + string(fileName);
 
     /* 打开文件 */
+    string realFileName = "../data/" + string(fileName);
+    
     ifstream readFile(realFileName.c_str(), ios::in | ios::binary); //二进制读方式打开
+    // 没有相应文件
+    if(readFile == NULL) {
+        string err = "No such file: " + string(fileName);
+    }
 
     cout << "start transfer file" << endl;
 
     int recAck = 0;
     int sendAck = 0;
+
     /* 每读取一段数据，便将其发给客户端 */
     UDP_PACK pack_info;
     while (true)
@@ -89,13 +174,14 @@ void Server::dealGet() {
                 {
                     readFile.read((char *)&pack_info.data, sizeof(int) * MSG_BUG_SIZE);
                     pack_info.FIN = false;
-                    readFile.close();
                 }
                 else
                 {
                     pack_info.FIN = true;
+                    readFile.close();
                 }
                 pack_info.bufferSize = readFile.gcount();
+                cout << pack_info.bufferSize << " " << pack_info.FIN << endl;
                 /* 发送ack放进包头,用于标记顺序 */
                 pack_info.ack = sendAck;
                 if (sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, addrLen) < 0)
@@ -108,6 +194,13 @@ void Server::dealGet() {
                 UDP_PACK rcv;
                 recvfrom(serSocket, (char *)&rcv, sizeof(rcv), 0, (sockaddr *)&cltAddr, &addrLen);
                 recAck = rcv.ack;
+                // 结束
+                if (rcv.FIN && recAck == sendAck)
+                {
+                    ::closesocket(serSocket);
+                    ::WSACleanup();
+                    cout << "Socket closed..." << endl;
+                }
             }
             catch (exception &err)
             {
@@ -130,8 +223,7 @@ void Server::dealGet() {
         }
     }
     /* 关闭文件 */
-    readFile.close();
-    printf("File:%s Transfer Successful!\n", fileName);
+    cout << "File:" << fileName << " Transfer Successful!" << endl;
 }
 
 inline DWORD WINAPI CreateClientThread(LPVOID lpParameter)

@@ -27,7 +27,6 @@ Client::Client(string _ip, string _file, int _port) {
     this->serAddr.sin_family = AF_INET;;
     this->serAddr.sin_port = htons(this->serPort);
     this->serAddr.sin_addr.S_un.S_addr = inet_addr(this->serverIp.c_str());
-    
 
     this->addrLen = sizeof(serAddr);
     cout << "Server socket created successfully..." << endl;
@@ -40,20 +39,22 @@ Client::~Client() {
 }
 
 void Client::lsend() {
+
+    string fileName = file.substr(file.find_last_of('/')+1);
+    // cout << fileName << endl;
+
     /* 发送文件名 */
-    if (sendto(cltSocket, file.c_str(), strlen(file.c_str()), 0, (sockaddr *)&serAddr, addrLen) < 0)
+    if (sendto(cltSocket, fileName.c_str(), strlen(fileName.c_str()), 0, (sockaddr *)&serAddr, addrLen) < 0)
     {
-        cout << "Send File Name: " << file << " Failed" << endl;
+        cout << "Send File Name: " << fileName << " Failed" << endl;
         exit(1);
     }
 
     /* 打开文件，准备写入 */
-    string filePath = "../data/" + file;
-    // cout << filePath << endl;
-    ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
-    if (NULL == writerFile)
+    ifstream readFile(file.c_str(), ios::in | ios::binary); //二进制读方式打开
+    if (NULL == readFile)
     {
-        cout << "File: " << filePath << " Can Not Open To Write" << endl;
+        cout << "File: " << file << " Can Not Open To Write" << endl;
         exit(2);
     }
 
@@ -63,46 +64,74 @@ void Client::lsend() {
     UDP_PACK pack_info;
     while (true)
     {
-        if (recvfrom(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, &addrLen) > 0)
+        try
         {
-            cout << "ack: " << pack_info.ack << endl;
-            recAck = pack_info.ack;
-            if (sendAck == recAck)
+            if (recAck == sendAck)
             {
-                sendAck++;
+                if (readFile.peek() != EOF)
+                {
+                    readFile.read((char *)&pack_info.data, sizeof(int) * MSG_BUG_SIZE);
+                    pack_info.FIN = false;
+                }
+                else
+                {
+                    pack_info.FIN = true;
+                    readFile.close();
+                }
+                pack_info.bufferSize = readFile.gcount();
+                /* 发送ack放进包头,用于标记顺序 */
                 pack_info.ack = sendAck;
 
-                /* 发送数据包确认信息 */
+                cout << pack_info.ack << " " <<  pack_info.bufferSize << " " << pack_info.FIN << endl;
+
                 if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0)
                 {
-                    printf("Send confirm information failed!");
+                    perror("Send File Failed: ");
+                    break;
                 }
-                writerFile.write((char *)&pack_info.data, pack_info.bufferSize);
-                if (pack_info.FIN)
-                {
-                    writerFile.close();
+                /* 接收确认消息 */
+                UDP_PACK rcv;
+                if(recvfrom(cltSocket, (char *)&rcv, sizeof(rcv), 0, (sockaddr *)&serAddr, &addrLen) < 0) {
+                    perror("Send File Failed: ");
+                    break;
+                }
+                ++sendAck;
+                recAck = rcv.ack;
+                if(rcv.FIN) {
                     ::closesocket(cltSocket);
                     ::WSACleanup();
-                    cout << "Receive File:\t" << file << " From Server IP Successful!" << endl;
-                    writerFile.close();
+                    cout << "Transfer successfully" << endl;
+                    cout << "Socket closed..." << endl;
                     exit(0);
                 }
             }
             else
             {
-                /* 如果是重发的包或者发生部分丢包 */
-                pack_info.ack = sendAck;
-                /* 重发数据包确认信息 */
+                /* 如果接收的id和发送的id不相同,重新发送 */
                 if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0)
                 {
-                    printf("Send confirm information failed!");
+                    perror("Send File Failed:");
+                    break;
+                }
+                /* 接收确认消息 */
+                UDP_PACK rcv;
+                recvfrom(cltSocket, (char *)&rcv, sizeof(rcv), 0, (sockaddr *)&serAddr, &addrLen);
+                recAck = rcv.ack;
+
+                if (rcv.FIN && recAck == sendAck)
+                {
+                    cout << "Transfer successfully" << endl;
+                    ::closesocket(cltSocket);
+                    ::WSACleanup();
+                    cout << "Socket closed..." << endl;
+                    exit(0);
                 }
             }
         }
-        else
+        catch (exception &err)
         {
-            cerr << "Have a error!" << endl;
-            exit(3);
+            cerr << err.what() << endl;
+            exit(1);
         }
     }
 }
@@ -139,15 +168,14 @@ void Client::lget() {
 
                 /* 发送数据包确认信息 */
                 if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0) {
-                    printf("Send confirm information failed!");
+                    cout << "Send confirm information failed!" << endl;
                 }
                 writerFile.write((char *)&pack_info.data, pack_info.bufferSize);
                 if(pack_info.FIN) {
                     writerFile.close();
                     ::closesocket(cltSocket);
                     ::WSACleanup();
-                    cout << "Receive File:\t" << file << " From Server IP Successful!" << endl;
-                    writerFile.close();
+                    cout << "Receive File:\t" << file << " From Server " << serverIp << " Successful!" << endl;
                     exit(0);
                 }
             }
@@ -156,13 +184,9 @@ void Client::lget() {
                 pack_info.ack = sendAck;
                 /* 重发数据包确认信息 */
                 if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0) {
-                    printf("Send confirm information failed!");
+                    cout << "Send confirm information failed!" << endl;
                 }
             }
-        }
-        else {
-            cerr << "Have a error!" << endl;
-            exit(3);
         }
     }
 }
