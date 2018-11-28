@@ -4,6 +4,7 @@
 #include "server.h"
 #include "package.h"
 #include <fstream>
+#include <ctime>
 
 #define MSG_BUG_SIZE 255
 
@@ -53,12 +54,14 @@ Server::~Server()
 
 void Server::waitForClient()
 {
-    // dealGet();
-    dealSend();
+    dealGet();
+    // dealSend();
 }
 
 void Server::dealSend()
 {
+
+    clock_t start, end;
 
     /* 接收数据 */
     int FILE_NAME_MAX_SIZE = 100;
@@ -93,9 +96,17 @@ void Server::dealSend()
     UDP_PACK pack_info;
     while (true)
     {
+
+        end = clock(); //程序结束用时
+        double endtime = (double)(end - start) / CLOCKS_PER_SEC;
+        if(endtime >= 5.0) {
+            // 超时重传
+            sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, addrLen);
+        }
+
         if (recvfrom(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, &addrLen) > 0)
         {
-            cout << "ack: " << pack_info.ack << " "<< pack_info.bufferSize << endl;
+            // cout << "ack: " << pack_info.ack << " " << pack_info.bufferSize << endl;
             recAck = pack_info.ack;
             if (sendAck == recAck)
             {
@@ -110,6 +121,7 @@ void Server::dealSend()
                 {
                     cout << "Send confirm information failed!" << endl;
                 }
+                start = clock(); //程序开始计时
                 if (pack_info.FIN)
                 {
                     writerFile.close();
@@ -123,13 +135,14 @@ void Server::dealSend()
                 /* 如果是重发的包或者发生部分丢包 */
                 pack_info.ack = sendAck;
                 /* 重发数据包确认信息 */
-                if (sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0)
+                if (sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, addrLen) < 0)
                 {
                     cout << "Send confirm information failed!" << endl;
                 }
             }
         }
-        else {
+        else
+        {
             break;
         }
     }
@@ -150,11 +163,20 @@ void Server::dealGet()
 
     /* 打开文件 */
     string realFileName = "../data/" + string(fileName);
-    
+
     ifstream readFile(realFileName.c_str(), ios::in | ios::binary); //二进制读方式打开
     // 没有相应文件
-    if(readFile == NULL) {
+    if (readFile == NULL)
+    {
         string err = "No such file: " + string(fileName);
+        UDP_PACK confirm;
+        confirm.ack = -1;
+        confirm.FIN = true;
+        sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&cltAddr, addrLen);
+        ::closesocket(serSocket);
+        ::WSACleanup();
+        cout << "Socket closed..." << endl;
+        return;
     }
 
     cout << "start transfer file" << endl;
@@ -181,7 +203,6 @@ void Server::dealGet()
                     readFile.close();
                 }
                 pack_info.bufferSize = readFile.gcount();
-                cout << pack_info.bufferSize << " " << pack_info.FIN << endl;
                 /* 发送ack放进包头,用于标记顺序 */
                 pack_info.ack = sendAck;
                 if (sendto(serSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&cltAddr, addrLen) < 0)

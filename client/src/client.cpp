@@ -3,7 +3,7 @@
 #include "client.h"
 #include "package.h"
 #include <fstream>
-#pragma comment(lib, "ws2_32.lib")
+#include <ctime>
 
 #define MSG_BUG_SIZE 255
 
@@ -47,6 +47,9 @@ void Client::lsend() {
     if (sendto(cltSocket, fileName.c_str(), strlen(fileName.c_str()), 0, (sockaddr *)&serAddr, addrLen) < 0)
     {
         cout << "Send File Name: " << fileName << " Failed" << endl;
+        ::closesocket(cltSocket);
+        ::WSACleanup();
+        cout << "Socket closed..." << endl;
         exit(1);
     }
 
@@ -55,6 +58,9 @@ void Client::lsend() {
     if (NULL == readFile)
     {
         cout << "File: " << file << " Can Not Open To Write" << endl;
+        ::closesocket(cltSocket);
+        ::WSACleanup();
+        cout << "Socket closed..." << endl;
         exit(2);
     }
 
@@ -137,10 +143,15 @@ void Client::lsend() {
 }
 
 void Client::lget() {
-    
+
+    clock_t start, end;
+
     /* 发送文件名 */
     if (sendto(cltSocket, file.c_str(), strlen(file.c_str()), 0, (sockaddr *)&serAddr, addrLen) < 0) {
         cout << "Send File Name: " << file <<  " Failed" << endl;
+        ::closesocket(cltSocket);
+        ::WSACleanup();
+        cout << "Socket closed..." << endl;
         exit(1);
     }
 
@@ -151,6 +162,9 @@ void Client::lget() {
     if (NULL == writerFile)
     {
         cout << "File: " << filePath << " Can Not Open To Write" << endl;
+        ::closesocket(cltSocket);
+        ::WSACleanup();
+        cout << "Socket closed..." << endl;
         exit(2);
     }
 
@@ -159,9 +173,25 @@ void Client::lget() {
     int recAck = 0;
     UDP_PACK pack_info;
     while (true) {
+
+        end = clock(); //程序结束用时
+        double endtime = (double)(end - start) / CLOCKS_PER_SEC;
+        if (endtime >= 5.0)
+        {
+            // 超时重传
+            sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen);
+        }
+
         if (recvfrom(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, &addrLen) > 0) {
             cout << "ack: " << pack_info.ack << endl;
             recAck = pack_info.ack;
+            if(recAck == -1) {
+                cout << "Server no such a file: " + file << endl;
+                ::closesocket(cltSocket);
+                ::WSACleanup();
+                cout << "Socket closed..." << endl;
+                exit(0);
+            }
             if (sendAck == recAck) {
                 sendAck++;
                 pack_info.ack = sendAck;
@@ -170,12 +200,15 @@ void Client::lget() {
                 if (sendto(cltSocket, (char *)&pack_info, sizeof(pack_info), 0, (sockaddr *)&serAddr, addrLen) < 0) {
                     cout << "Send confirm information failed!" << endl;
                 }
+
+                start = clock(); //程序开始计时
+
                 writerFile.write((char *)&pack_info.data, pack_info.bufferSize);
                 if(pack_info.FIN) {
                     writerFile.close();
                     ::closesocket(cltSocket);
                     ::WSACleanup();
-                    cout << "Receive File:\t" << file << " From Server " << serverIp << " Successful!" << endl;
+                    cout << "Receive File: " << file << " From Server " << serverIp << " Successful!" << endl;
                     exit(0);
                 }
             }
@@ -189,4 +222,7 @@ void Client::lget() {
             }
         }
     }
+    ::closesocket(cltSocket);
+    ::WSACleanup();
+    cout << "Socket closed..." << endl;
 }
